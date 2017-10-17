@@ -1,0 +1,127 @@
+# Customise this file, documentation can be found here:
+# https://docs.fastlane.tools/actions/
+# All available actions: https://docs.fastlane.tools/actions
+# can also be listed using the `fastlane actions` command
+
+# Change the syntax highlighting to Ruby
+# All lines starting with a # are ignored when running `fastlane`
+
+# If you want to automatically update fastlane if a new version is available:
+# update_fastlane
+
+# This is the minimum version number required.
+# Update this, if you use features of a newer version
+
+# 远程Git引用：
+# import_from_git(url: 'https://github.com/GengmeiRD/Fastfiles', branch: 'master')
+
+fastlane_version "2.61.0"
+
+default_platform :ios
+
+platform :ios do
+  before_all do
+    ENV["SLACK_URL"] = "https://odeen.slack.com"
+    git_pull
+  	cocoapods
+    # carthage
+  end
+
+  desc "Runs all the tests"
+  lane :test do
+    scan
+  end
+
+  desc "Creating a code signing certificate and provisioning profile"
+  lane :provision do
+    # 在iTunes Connect上创建App
+    produce(
+      app_name: '系统字体',
+      language: 'English',
+      app_version: '1.0.1',
+      sku: '123abc'
+    )
+
+    # 在DevCenter上创建App ID
+    cert 
+
+    # 在DevCenter上创建provisioning profile, 并下载安装
+    sigh(force: true)
+    # sigh(adhoc: true)
+    # sigh(development: true)
+    
+  end
+
+  desc "Submit a new Beta Build to Apple TestFlight"
+  desc "This will also make sure the profile is up to date"
+  lane :beta do
+  	increment_build_number
+
+    # Build your app
+    gym(
+    	scheme: "AvailableFonts",
+    	export_method: "app-store",
+    	export_xcargs: "-allowProvisioningUpdates" # 允许Xcode自动管理证书
+    )
+
+    # 上传到testflight
+    testflight
+
+    # build成功通知
+    slack(
+    	message: "Successfully distributed a new beta build",
+    )
+
+    # sh "your_script.sh"
+    # You can also use other beta testing services here (run `fastlane actions`)
+  end
+
+  desc "Deploy a new version to the App Store"
+  lane :release do
+  	increment_version_number(
+  		bump_type: "patch"
+  	)
+
+    # 根据UI Testing进行屏幕截图
+    snapshot
+
+    # Build your app
+    gym(
+    	scheme: "AvailableFonts",
+    	export_method: "app-store",
+    	export_xcargs: "-allowProvisioningUpdates" # 允许Xcode自动管理证书
+    )
+
+    # 上传到App Store
+    deliver(
+    	force: true,
+    	submit_for_review: true # 自动提交审核
+    )
+
+    # frameit
+  end
+
+  # You can define as many lanes as you want
+
+  after_all do |lane|
+    # This block is called, only if the executed lane was successful
+
+    # slack(
+    #   message: "Successfully deployed new App Update."
+    # )
+  end
+
+  error do |lane, exception|
+    slack(
+      message: exception.message,
+      success: false
+    )
+  end
+end
+
+
+# More information about multiple platforms in fastlane: https://github.com/fastlane/fastlane/blob/master/fastlane/docs/Platforms.md
+# All available actions: https://docs.fastlane.tools/actions
+
+# fastlane reports which actions are used. No personal data is recorded. 
+# Learn more at https://github.com/fastlane/fastlane#metrics
